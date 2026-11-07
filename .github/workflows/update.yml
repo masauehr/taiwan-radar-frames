@@ -3,7 +3,7 @@ name: update-frames
 # 10分ごとに台湾レーダーの最新フレームを追加し、data ブランチ（GitHub Pages）へ公開する
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '7,17,27,37,47,57 * * * *'  # 毎時0分・10分などの混雑する時刻を避ける（遅延・欠落を減らすため）
   workflow_dispatch:
     inputs:
       backfill_hours:
