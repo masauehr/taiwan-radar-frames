@@ -1,0 +1,68 @@
+name: update-frames
+
+# 10分ごとに台湾レーダーの最新フレームを追加し、data ブランチ（GitHub Pages）へ公開する
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      backfill_hours:
+        description: '過去データで穴埋めする時間数（0なら穴埋めしない）'
+        default: '0'
+
+permissions:
+  contents: write
+
+# 同時実行を避ける（遅延したcronが重なっても1つずつ処理）
+concurrency:
+  group: update-frames
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: 依存をインストール
+        run: pip install -r requirements.txt
+
+      - name: data ブランチを取得（初回は空のディレクトリ）
+        run: |
+          if git ls-remote --exit-code --heads origin data > /dev/null 2>&1; then
+            git fetch --depth=1 origin data
+            git worktree add --detach data FETCH_HEAD
+          else
+            mkdir data
+          fi
+
+      - name: 穴埋め（手動実行で時間数を指定したときのみ）
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.backfill_hours != '0' }}
+        env:
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
+          HOURS: ${{ inputs.backfill_hours }}
+        run: python radar_frames.py backfill --out data --hours "$HOURS"
+
+      - name: 最新フレームを追加
+        id: latest
+        env:
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
+        run: python radar_frames.py latest --out data
+
+      - name: 公開（履歴を残さず1コミットで data ブランチを置き換える）
+        if: ${{ steps.latest.outputs.changed == 'true' || (github.event_name == 'workflow_dispatch' && inputs.backfill_hours != '0') }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git worktree add --orphan -b data-new publish
+          rsync -a --exclude '.git' data/ publish/
+          cd publish
+          git add -A
+          git commit -q -m "update frames $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push --force origin data-new:data

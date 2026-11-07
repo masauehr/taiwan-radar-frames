@@ -1,0 +1,14 @@
+# 認証情報（コミット禁止）
+.env
+.env.*
+
+# 生成物（公開は data ブランチ。main には入れない）
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store
