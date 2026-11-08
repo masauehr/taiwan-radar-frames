@@ -5,7 +5,7 @@
 詳しくは [MANUAL.md](MANUAL.md) を参照。
 
 - **配信URL**: https://masauehr.github.io/taiwan-radar-frames/index.json
-- **更新**: GitHub Actions が10分ごと（Macは使わない）
+- **更新**: GitHub Actions を cron-job.org から5分ごとに起動（Macは使わない。設定は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)）
 - **出典（表示義務）**: 提供機關／交通部中央氣象署 雷達整合回波圖（政府資料開放授權條款）
 
 ## 配信物
