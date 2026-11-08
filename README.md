@@ -11,7 +11,9 @@
 ## 配信物
 
 ```
-index.json              フレーム一覧・範囲 bounds・出典・更新時刻
+index.json              レーダーのフレーム一覧・範囲 bounds・出典・更新時刻、観測の一覧(obs)
+obs/YYYYMMDDHHMM.json   地上観測のスナップショット（UTC・値だけ・363局・約18KB）
+obs/stations.json       観測地点の名前・位置・標高
 frames/YYYYMMDDHHMM.png 透明PNG（UTC・921×881px）。範囲は緯度18.0〜29.0 / 経度115.0〜126.5
 ```
 

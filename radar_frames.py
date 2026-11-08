@@ -4,11 +4,14 @@
 サブコマンド:
   latest   最新の画像（O-A0058-001・キー不要のPNG）を透過処理して保存する。
            観測時刻だけ、公式JSON（キー必要）の DateTime から正確に取る。
+           あわせて地上観測（O-A0003-001・キー不要・363局）を10分ごとのスナップショットとして保存する。
   backfill 過去の格子データ（O-A0059-001）から直近N時間分を画像にして穴埋めする。
 
 出力:
   <out>/frames/YYYYMMDDHHMM.png   （UTC・透明PNG・全フレーム同じ範囲）
-  <out>/index.json                （フレーム一覧・範囲・出典）
+  <out>/obs/YYYYMMDDHHMM.json     （地上観測のスナップショット・UTC・値だけ）
+  <out>/obs/stations.json         （観測地点の名前・位置・標高。ほぼ不変）
+  <out>/index.json                （フレーム一覧・範囲・出典・観測の一覧）
 
 APIキーは環境変数 CWA_API_KEY から読み、ログやエラーに出さない。
 """
@@ -61,6 +64,12 @@ PALETTE = [
 ]
 
 ATTRIBUTION = "提供機關／交通部中央氣象署 雷達整合回波圖"
+
+# 地上観測 O-A0003-001（有人・主要局。キー不要の公開S3。最新のみで過去は無いため、自分で溜める）
+OBS_URL = "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0003-001.json"
+# スナップショットの値の並び（地点IDごとに、この順の配列）
+OBS_KEYS = ["wd", "ws", "temp", "rh", "rain", "gust", "pres", "weather"]
+OBS_ATTRIBUTION = "提供機關／交通部中央氣象署 地面觀測資料"
 
 
 class ApiError(Exception):
@@ -161,6 +170,7 @@ def grid_to_image(xml_text):
 # ── 出力（フレーム・索引） ──
 def ensure_out(out):
     os.makedirs(os.path.join(out, "frames"), exist_ok=True)
+    os.makedirs(os.path.join(out, "obs"), exist_ok=True)
     nojekyll = os.path.join(out, ".nojekyll")
     if not os.path.exists(nojekyll):
         open(nojekyll, "w").close()
@@ -176,7 +186,21 @@ def load_index(out):
         return []
 
 
-def save_index(out, frames):
+def load_obs_index(out):
+    path = os.path.join(out, "index.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("obs", {}).get("frames", [])
+    except (ValueError, OSError):
+        return []
+
+
+def save_index(out, frames, obs=None):
+    """obs=None のときは、既存の index.json の観測の一覧を引き継ぐ"""
+    if obs is None:
+        obs = load_obs_index(out)
     frames = sorted(frames, key=lambda f: f["t"])
     body = {
         "updated": iso_z(datetime.now(timezone.utc)),
@@ -184,11 +208,117 @@ def save_index(out, frames):
         "attribution": ATTRIBUTION,
         "frames": frames,
     }
+    if obs:
+        body["obs"] = {
+            "stations": "obs/stations.json",
+            "keys": OBS_KEYS,
+            "attribution": OBS_ATTRIBUTION,
+            "frames": sorted(obs, key=lambda f: f["t"]),
+        }
     path = os.path.join(out, "index.json")
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(body, f, ensure_ascii=False, indent=1)
     os.replace(tmp, path)
+
+
+# ── 地上観測 ──
+def _num(x, nd=1):
+    """欠測(-99など)や変換できない値は None。値は小数 nd 桁に丸める"""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return None if v <= -90 else round(v, nd)
+
+
+def parse_obs(data):
+    """O-A0003-001 の JSON → (観測時刻(UTC), 地点の一覧, {地点ID: [OBS_KEYSの順の値]})"""
+    try:
+        stations = data["cwaopendata"]["dataset"]["Station"]
+    except (KeyError, TypeError):
+        raise ApiError("観測データの形式が想定外")
+    meta, values, tmax = [], {}, None
+    for s in stations:
+        w = s.get("WeatherElement") or {}
+        geo = s.get("GeoInfo") or {}
+        wgs = next((c for c in geo.get("Coordinates", []) if c.get("CoordinateName") == "WGS84"), None)
+        sid = s.get("StationId")
+        if not wgs or not sid:
+            continue
+        lat, lon = _num(wgs.get("StationLatitude"), 5), _num(wgs.get("StationLongitude"), 5)
+        if lat is None or lon is None:
+            continue
+        t = s.get("ObsTime", {}).get("DateTime")
+        if t:
+            d = parse_dt(t)
+            tmax = d if tmax is None or d > tmax else tmax
+        weather = w.get("Weather")
+        weather = weather if weather and weather != "-99" else None
+        meta.append({"id": sid, "name": s.get("StationName", ""), "county": geo.get("CountyName", ""),
+                     "town": geo.get("TownName", ""), "lat": lat, "lon": lon, "alt": _num(geo.get("StationAltitude"))})
+        values[sid] = [
+            _num(w.get("WindDirection"), 0), _num(w.get("WindSpeed")), _num(w.get("AirTemperature")),
+            _num(w.get("RelativeHumidity"), 0), _num((w.get("Now") or {}).get("Precipitation")),
+            _num((w.get("GustInfo") or {}).get("PeakGustSpeed")), _num(w.get("AirPressure")), weather,
+        ]
+    if not values or tmax is None:
+        raise ApiError("観測データが空")
+    return tmax, meta, values
+
+
+def add_obs(out, obs, dt, values):
+    name = "obs/%s.json" % frame_id(dt)
+    with open(os.path.join(out, name), "w", encoding="utf-8") as f:
+        json.dump({"t": iso_z(dt), "k": OBS_KEYS, "v": values}, f, ensure_ascii=False, separators=(",", ":"))
+    obs[:] = [o for o in obs if o["file"] != name]
+    obs.append({"t": iso_z(dt), "file": name})
+
+
+def write_stations(out, meta):
+    """地点の一覧が変わったときだけ書く。書いたら True"""
+    path = os.path.join(out, "obs", "stations.json")
+    body = {"stations": meta}
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                if json.load(f) == body:
+                    return False
+        except (ValueError, OSError):
+            pass
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(body, f, ensure_ascii=False, separators=(",", ":"))
+    return True
+
+
+def prune_obs(out, obs, now):
+    """保持期間より古いスナップショットと、索引にないファイルを削除する。変更があれば True"""
+    cutoff = now - timedelta(hours=KEEP_HOURS)
+    keep = [o for o in obs if parse_dt(o["t"]) >= cutoff]
+    changed = len(keep) != len(obs)
+    names = {o["file"] for o in keep}
+    odir = os.path.join(out, "obs")
+    for fn in os.listdir(odir):
+        if fn.endswith(".json") and fn != "stations.json" and "obs/" + fn not in names:
+            os.remove(os.path.join(odir, fn))
+            changed = True
+    obs[:] = keep
+    return changed
+
+
+def update_obs(out, obs, now):
+    """最新の地上観測を取得して保存する。変更があれば True"""
+    tmax, meta, values = parse_obs(json.loads(http_get(OBS_URL)))
+    changed = write_stations(out, meta)
+    if tmax < now - timedelta(hours=KEEP_HOURS):
+        print("観測が古すぎるため保存しない:", iso_z(tmax))
+        return changed
+    if any(o["file"] == "obs/%s.json" % frame_id(tmax) for o in obs):
+        print("最新の観測は取得済み:", frame_id(tmax))
+        return changed
+    add_obs(out, obs, tmax, values)
+    print("観測を追加:", frame_id(tmax), "(%d局)" % len(values))
+    return True
 
 
 def add_frame(out, frames, dt, image):
@@ -226,29 +356,50 @@ def cmd_latest(args):
     key = get_key()
     ensure_out(args.out)
     frames = load_index(args.out)
-    meta = json.loads(http_get("%s/fileapi/v1/opendataapi/O-A0058-001?Authorization=%s&format=JSON" % (API, key)))
-    ds = meta["cwaopendata"]["dataset"]
-    dt = parse_dt(ds["DateTime"])
+    obs = load_obs_index(args.out)
+    now = datetime.now(timezone.utc)
     changed = False
-    name = "frames/%s.png" % frame_id(dt)
-    if any(f["file"] == name for f in frames):
-        print("最新フレームは取得済み:", frame_id(dt))
-    else:
-        image = process_image(http_get(ds["resource"]["ProductURL"]))
-        add_frame(args.out, frames, dt, image)
+    failed = False
+
+    # レーダー（失敗しても観測の取得は続ける）
+    try:
+        meta = json.loads(http_get("%s/fileapi/v1/opendataapi/O-A0058-001?Authorization=%s&format=JSON" % (API, key)))
+        ds = meta["cwaopendata"]["dataset"]
+        dt = parse_dt(ds["DateTime"])
+        name = "frames/%s.png" % frame_id(dt)
+        if any(f["file"] == name for f in frames):
+            print("最新フレームは取得済み:", frame_id(dt))
+        else:
+            add_frame(args.out, frames, dt, process_image(http_get(ds["resource"]["ProductURL"])))
+            changed = True
+            print("追加:", frame_id(dt))
+    except ApiError as e:
+        print("レーダーの取得に失敗:", e, file=sys.stderr)
+        failed = True
+
+    # 地上観測（失敗してもレーダーには影響しない）
+    try:
+        if update_obs(args.out, obs, now):
+            changed = True
+    except ApiError as e:
+        print("観測の取得に失敗:", e, file=sys.stderr)
+        failed = True
+
+    if prune(args.out, frames, now):
         changed = True
-        print("追加:", frame_id(dt))
-    if prune(args.out, frames, datetime.now(timezone.utc)):
+    if prune_obs(args.out, obs, now):
         changed = True
     if changed:
-        save_index(args.out, frames)
+        save_index(args.out, frames, obs)
     set_output(changed)
+    return 1 if failed else 0
 
 
 def cmd_backfill(args):
     key = get_key()
     ensure_out(args.out)
     frames = load_index(args.out)
+    obs = load_obs_index(args.out)
     now = datetime.now(timezone.utc)
     hours = args.hours
     q = urllib.parse.urlencode({
@@ -275,9 +426,12 @@ def cmd_backfill(args):
     changed = added > 0
     if prune(args.out, frames, now):
         changed = True
+    if prune_obs(args.out, obs, now):
+        changed = True
     if changed:
-        save_index(args.out, frames)
+        save_index(args.out, frames, obs)
     set_output(changed)
+    return 0
 
 
 def main(argv=None):
@@ -292,11 +446,10 @@ def main(argv=None):
     b.set_defaults(fn=cmd_backfill)
     args = p.parse_args(argv)
     try:
-        args.fn(args)
+        return args.fn(args) or 0
     except ApiError as e:
         print("エラー:", e, file=sys.stderr)
         return 1
-    return 0
 
 
 if __name__ == "__main__":
