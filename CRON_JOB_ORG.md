@@ -114,12 +114,13 @@ gh api "repos/masauehr/taiwan-radar-frames/contents/frames?ref=data" --jq '[.[].
 
 ## 7. トークンの更新（期限: 2026-12-08 00:15 UTC ＝ 日本時間 2026-12-08 09:15）
 
-期限が切れると、cron-job.orgからの起動が401で失敗し、配信が止まる。**期限の1週間前（12月1日ごろ）までに更新する。**
+期限が切れると、cron-job.orgからの起動が401で失敗し、配信が止まる。**期限の1週間前（12月1日ごろ）までに更新する。** 期限の14日前から、Slack DMで通知が届く（10節）。
 
 1. GitHubで、手順Aと同じ設定で新しいトークンを作る（または既存のトークンを Regenerate）。
 2. cron-job.org のジョブの ADVANCED → Headers → `Authorization` の Value を `Bearer <新トークン>` に更新して保存。
 3. **TEST RUN** で 204 を確認。
 4. 古いトークンは、GitHubの Fine-grained tokens 一覧から **Delete**（失効）する。
+5. **Slack通知の期限ファイルを新しい期限に書き換える**（10節）。`echo '新しい期限' > ~/.config/taiwan_radar_frames/token_expiry`。忘れると、古い期限で「期限切れ」の通知が毎日届く。
 
 ## 8. セキュリティ
 
@@ -132,3 +133,58 @@ gh api "repos/masauehr/taiwan-radar-frames/contents/frames?ref=data" --jq '[.[].
 - cron-job.org が止まると、配信は更新されず、アプリのレーダーが古くなる（「観測から◯分前」が大きくなる）。
 - 手動で最新に戻す: `gh workflow run update.yml --repo masauehr/taiwan-radar-frames -f backfill_hours=3`（過去3時間分を穴埋め）。
 - やめる場合: cron-job.org のジョブを削除し、GitHubのトークンを Delete する。
+
+## 10. トークン期限の Slack 通知（Bluesky自動投稿と同じ方式）
+
+トークンの期限が近づいたら Slack DM で知らせる。Bluesky自動投稿（`automated-data-collector`）と同じく、**Macのlaunchd が毎日スクリプトを起動し、`openclaw message send` 経由で Slack DM に送る**。
+
+| 項目 | 内容 |
+|------|------|
+| スクリプト | `ops/token_expiry_notify.py`（標準ライブラリのみ。通知の部品は他プロジェクトと共有せずコピーして持つ） |
+| 起動 | `ops/com.user.taiwan_radar_token_notify.plist`（毎日 9:00 JST。スリープ中だった日は復帰後に1回） |
+| 通知する段階 | 期限の**14日前・7日前・3日前・2日前・1日前**。期限切れ後は**毎日**（更新して `token_expiry` を書き換えるまで）。同じ段階は1回だけ |
+| 失敗時 | 送れなかった段階は状態を更新せず、次回の実行で再送する。通知の失敗でスクリプトは止めない |
+| 注意 | OpenClaw Gateway が止まっていると届かない（Bluesky通知と同じ制約）。Macが起動していない日は実行されない |
+
+### 設定ファイル（`~/.config/taiwan_radar_frames/`・git管理外）
+
+| ファイル | 内容 |
+|------|------|
+| `token_expiry` | トークンの期限を**1行**で。例: `2026-12-08T00:15:02Z`（cron-job.orgのテスト実行の応答ヘッダー `github-authentication-token-expiration` の値） |
+| `slack_to` | 通知先（1行・`slack:U…`）。Bluesky通知と同じ宛先でよい |
+| `notify_state.json` | 通知済みの段階（自動生成。`token_expiry` の値が変わると自動でリセット） |
+| `notify.log` | launchdの出力 |
+
+### 導入手順
+
+```bash
+mkdir -p ~/.config/taiwan_radar_frames
+echo '2026-12-08T00:15:02Z' > ~/.config/taiwan_radar_frames/token_expiry
+cp ~/.config/bsky/slack_to ~/.config/taiwan_radar_frames/slack_to        # 中身は表示しない
+chmod 600 ~/.config/taiwan_radar_frames/slack_to
+cp ~/projects/taiwan_radar_frames/ops/com.user.taiwan_radar_token_notify.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.taiwan_radar_token_notify.plist
+```
+
+動作確認:
+
+```bash
+python3 ~/projects/taiwan_radar_frames/ops/token_expiry_notify.py --test            # テスト通知（Slackに届けば設定は正常）
+python3 ~/projects/taiwan_radar_frames/ops/token_expiry_notify.py --dry-run --now 2026-12-02T00:00:00Z   # 通知文だけ表示（送らない）
+launchctl print gui/$(id -u)/com.user.taiwan_radar_token_notify | head                # 登録の確認
+```
+
+### トークンを更新したとき（7節の最後に必ず行う）
+
+```bash
+echo '新しい期限（例 2027-01-07T00:15:02Z）' > ~/.config/taiwan_radar_frames/token_expiry
+```
+
+期限が変わると状態が自動でリセットされ、新しいトークンの期限に向けて、また14日前から通知される。**書き換えを忘れると、古い期限で「期限切れ」の通知が毎日届く**（通知が届いたら、まずこれを疑う）。
+
+### 止める・やめる
+
+```bash
+launchctl bootout gui/$(id -u)/com.user.taiwan_radar_token_notify
+rm ~/Library/LaunchAgents/com.user.taiwan_radar_token_notify.plist
+```

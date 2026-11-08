@@ -67,7 +67,7 @@ GitHub Actions（10分ごと）
 
 | 項目 | 内容 |
 |------|------|
-| 定期実行 | **cron-job.org から5分ごとに GitHub API で `workflow_dispatch` を呼んで起動**（2026-11-08〜）。GitHub Actions 自身の `schedule`（`7,17,27,37,47,57 * * * *`）は、実際には約3〜4時間おきにしか実行されず（新規リポジトリでは最初の約2時間は0回）、配信が止まったため。`schedule` は予備として残す（同時実行は1つずつ処理）。設定手順・トークンの更新・トラブル対応は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。**トークン期限: 2026-12-08 00:15 UTC（更新を忘れると配信が止まる）** |
+| 定期実行 | **cron-job.org から5分ごとに GitHub API で `workflow_dispatch` を呼んで起動**（2026-11-08〜）。GitHub Actions 自身の `schedule`（`7,17,27,37,47,57 * * * *`）は、実際には約3〜4時間おきにしか実行されず（新規リポジトリでは最初の約2時間は0回）、配信が止まったため。`schedule` は予備として残す（同時実行は1つずつ処理）。設定手順・トークンの更新・トラブル対応は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。**トークン期限: 2026-12-08 00:15 UTC（更新を忘れると配信が止まる）。期限の14日前から Slack DM で通知（Macのlaunchd＋`ops/token_expiry_notify.py`。CRON_JOB_ORG.md の10節）** |
 | 履歴 | `data` ブランチは毎回1コミットに置き換える（force push）。リポジトリが肥大化しない |
 | 保持 | 直近3時間（`KEEP_HOURS`）。古いフレームは自動削除 |
 | 穴埋め | 手動実行で `backfill_hours` を指定。**全期間（10日・約1,440コマ・約12.8GB）は取らない**。CWAは異常な負荷で会員資格を取り消す場合がある |
