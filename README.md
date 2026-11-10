@@ -43,7 +43,7 @@ fetch(BASE + 'index.json').then(r => r.json()).then(idx => {
 ## 蓄積サービス（要点）
 
 - **GitHub Actions**（`update-frames`）が取得・変換 → **GitHub Pages**（`data` ブランチ・毎回1コミットで置き換え）で配信。保持は3時間。
-- 定期起動は **cron-job.org から5分ごと**（GitHub の `schedule` は数時間おきにしか動かなかったため）。トークン期限（2026-12-08）の前に **Slack DM** で通知（Macのlaunchd）。詳しくは [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。
+- 定期起動は **cron-job.org から5分ごと**（GitHub の `schedule` は数時間おきにしか動かなかったため）。トークン期限（2026-12-08）の前と、`update-frames` の**失敗・成功停止（30分以上）**のときに **Slack DM** で通知（Macのlaunchd。`ops/token_expiry_notify.py`・`ops/failure_notify.py`）。詳しくは [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。
 
 ## 仕組み（概要）
 

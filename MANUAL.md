@@ -77,7 +77,7 @@ GitHub Actions（10分ごと）
 
 | 項目 | 内容 |
 |------|------|
-| 定期実行 | **cron-job.org から5分ごとに GitHub API で `workflow_dispatch` を呼んで起動**（2026-11-08〜）。GitHub Actions 自身の `schedule`（`7,17,27,37,47,57 * * * *`）は、実際には約3〜4時間おきにしか実行されず（新規リポジトリでは最初の約2時間は0回）、配信が止まったため。`schedule` は予備として残す（同時実行は1つずつ処理）。設定手順・トークンの更新・トラブル対応は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。**トークン期限: 2026-12-08 00:15 UTC（更新を忘れると配信が止まる）。期限の14日前から Slack DM で通知（Macのlaunchd＋`ops/token_expiry_notify.py`。CRON_JOB_ORG.md の10節）** |
+| 定期実行 | **cron-job.org から5分ごとに GitHub API で `workflow_dispatch` を呼んで起動**（2026-11-08〜）。GitHub Actions 自身の `schedule`（`7,17,27,37,47,57 * * * *`）は、実際には約3〜4時間おきにしか実行されず（新規リポジトリでは最初の約2時間は0回）、配信が止まったため。`schedule` は予備として残す（同時実行は1つずつ処理）。設定手順・トークンの更新・トラブル対応は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。**トークン期限: 2026-12-08 00:15 UTC（更新を忘れると配信が止まる）。期限の14日前から Slack DM で通知（Macのlaunchd＋`ops/token_expiry_notify.py`。CRON_JOB_ORG.md の10節）。`update-frames` の失敗と、成功が30分以上ない停止も Slack DM で通知（15分おき・`ops/failure_notify.py`。11節）** |
 | 履歴 | `data` ブランチは毎回1コミットに置き換える（force push）。リポジトリが肥大化しない |
 | 保持 | 直近3時間（`KEEP_HOURS`）。古いフレームは自動削除 |
 | 穴埋め | 手動実行で `backfill_hours` を指定。**全期間（10日・約1,440コマ・約12.8GB）は取らない**。CWAは異常な負荷で会員資格を取り消す場合がある |
@@ -111,6 +111,7 @@ python radar_frames.py latest --out data                 # 最新1コマを追�
 | 2026-11-07 | GitHubの `schedule` が新規リポジトリで約2時間1回も実行されず、cronを混雑しにくい分（7,17,27,37,47,57）に変更したが改善しなかった |
 | 2026-11-08 | **定期起動を cron-job.org（5分ごと・GitHub APIで `workflow_dispatch`）へ変更**。専用トークン（Fine-grained・Actionsのみ・このリポジトリのみ・期限 2026-12-08 00:15 UTC）。設定ガイド `CRON_JOB_ORG.md` を追加。`schedule` は予備として残す |
 | 2026-11-08 | **トークン期限の Slack 通知**を追加（`ops/token_expiry_notify.py`＋launchd。14/7/3/2/1日前と期限切れ後は毎日。Bluesky自動投稿と同方式）。単体テスト11件を追加 |
+| 2026-11-10 | **`update-frames` の失敗・停止の Slack 通知**を追加（`ops/failure_notify.py`＋launchd 15分おき。`gh run list` で直近の実行を調べ、新しい失敗はまとめて1通、成功が30分以上ない停止は復旧まで1回。cancelled は対象外。Bluesky自動投稿・トークン期限通知と同方式）。きっかけは 11/9 に403で1回・18時台に4回失敗していたのを後から気づいたこと（配信は次の成功回で復旧し途切れなし）。単体テスト7件を追加（全36件）。導入済み・テスト通知確認済み |
 | 2026-11-08 | **地上観測（`O-A0003-001`・363局）を10分ごとに保存**して配信（`obs/*.json`・`obs/stations.json`・`index.json` の `obs`）。単体テスト8件を追加（全29件）。レーダーと観測は、片方が失敗してももう片方を続ける |
 | 2026-11-08 | **全体像のまとめ `DATA_OVERVIEW.md`** を追加（台湾データの特徴・蓄積サービスの使い方・修正内容・運用チェックリスト）。READMEに要点を追記 |
 

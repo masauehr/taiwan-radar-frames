@@ -20,7 +20,7 @@
 └────────────────────────┘          └────────────────────────────────┘
                                           ▲ 5分ごとに起動（POST）
                                      cron-job.org（無料の外部cron）
-                                     期限前の通知: Macのlaunchd → Slack DM
+                                     期限前・失敗時の通知: Macのlaunchd → Slack DM
 ```
 
 | リポジトリ／ディレクトリ | 役割 | 公開 |
@@ -86,7 +86,7 @@
 | GitHub Pages（`data` ブランチ） | 保存したファイルを静的配信。毎回**履歴を残さず1コミットで置き換え**（force push）るので、リポジトリが肥大化しない | 帯域・容量に目安の上限がある（個人利用の範囲では問題なし） |
 | cron-job.org（無料） | **5分ごと**に GitHub API で `workflow_dispatch` を呼んで、ワークフローを起動する | 無料。連続失敗でジョブが自動停止されることがある |
 | GitHub トークン（Fine-grained） | cron-job.orgが使う。**Actions: Read and write のみ・`taiwan-radar-frames` 1つだけ**。期限 **2026-12-08 00:15 UTC** | 期限前に更新が必要 |
-| Slack DM通知（Macのlaunchd＋OpenClaw） | トークン期限の14/7/3/2/1日前と、期限切れ後は毎日、Slack DMで知らせる（Bluesky自動投稿と同じ方式） | Macが起動し、OpenClaw Gatewayが動いているときだけ届く |
+| Slack DM通知（Macのlaunchd＋OpenClaw） | トークン期限の14/7/3/2/1日前と、期限切れ後は毎日、Slack DMで知らせる。さらに `update-frames` の失敗と、成功が30分以上ない停止も15分おきに調べて知らせる（Bluesky自動投稿と同じ方式） | Macが起動し、OpenClaw Gatewayが動いているときだけ届く |
 | OpenStreetMap | 背景地図のタイル（キー不要） | 大量アクセスには不向き。出典表示が必要 |
 | unpkg | Leaflet 1.9.4 の読み込み | — |
 
@@ -126,6 +126,7 @@
 | 11-07 | **台湾天気ビューア（`taiwan_weather_viewer`）を新規作成**（日中併記・学習・実験向け） |
 | 11-07〜08 | GitHubの定期実行が動かない問題 → **cron-job.org から5分ごとに起動**する方式へ変更。設定ガイド（質疑つき）を作成 |
 | 11-08 | トークン期限の Slack 通知（Bluesky自動投稿と同方式）を追加・導入 |
+| 11-10 | `update-frames` の失敗・停止の Slack 通知を追加・導入（11/9に失敗が計5回あったが、気づけなかったため。配信は途切れていない） |
 | 11-08 | **配信が地上観測も10分ごとに保存**（過去3時間分）。`mobile_app` の台湾観測を、動画の時刻に追従させた。`taiwan_weather_viewer` の観測にも時刻スライダー |
 | 11-08 | 台湾天気ビューアを、**レーダーと観測を1画面に重ねる**構成へ（共通スライダー1本・層は個別にオン/オフ） |
 | 11-08 | 観測に**気圧（海面換算）**を追加。台湾天気ビューアの「仕組み」タブに、使っているAPI・データ・キーの扱いの説明を追加 |
@@ -137,6 +138,7 @@
 **taiwan_radar_frames（新規）**
 - `radar_frames.py`: 最新レーダーの透過処理、過去の格子データからの画像化、観測のスナップショット保存、古い分の削除。単体テスト18件（レーダー10件・観測8件）。
 - `ops/token_expiry_notify.py` ほか: トークン期限の Slack 通知。単体テスト11件（全体で29件。いずれもネットワーク・Slackを使わない）。
+- `ops/failure_notify.py` ほか: `update-frames` の失敗・成功停止の Slack 通知（15分おき）。単体テスト7件（全体で36件）。
 - ワークフロー `update.yml`、設定ガイド `CRON_JOB_ORG.md`、このまとめ。
 
 **mobile_app（衛星レーダーアプリ）**
@@ -164,6 +166,6 @@
 | ドキュメント | 内容 |
 |------|------|
 | [MANUAL.md](MANUAL.md) | 配信リポジトリの技術仕様（スナップショットの形式・値の並び・処理の詳細） |
-| [CRON_JOB_ORG.md](CRON_JOB_ORG.md) | cron-job.orgの設定、トークンの更新、トラブル対応、Slack期限通知の導入 |
+| [CRON_JOB_ORG.md](CRON_JOB_ORG.md) | cron-job.orgの設定、トークンの更新、トラブル対応、Slack期限通知・失敗通知の導入 |
 | `mobile_app/MANUAL.md` の 8-7・8-8 | 衛星レーダーアプリの台湾レーダー・台湾観測の仕様と改修履歴 |
 | `taiwan_weather_viewer/MANUAL.md` | 台湾天気ビューアの仕様（共通スライダー・層のオン/オフ・使っているAPI・データ） |
