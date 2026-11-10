@@ -188,3 +188,34 @@ echo '新しい期限（例 2027-01-07T00:15:02Z）' > ~/.config/taiwan_radar_fr
 launchctl bootout gui/$(id -u)/com.user.taiwan_radar_token_notify
 rm ~/Library/LaunchAgents/com.user.taiwan_radar_token_notify.plist
 ```
+
+## 11. 失敗・停止の Slack 通知（2026-11-10〜）
+
+`update-frames` が失敗したとき、または成功が止まったとき Slack DM で知らせる。10節と同じく、Macのlaunchd がスクリプトを起動し、`gh` で直近の実行を調べて `openclaw message send` で送る（通知のみ。再実行や修復はしない）。
+
+| 項目 | 内容 |
+|------|------|
+| スクリプト | `ops/failure_notify.py`（標準ライブラリ＋`gh`）。テストは `tests/test_failure_notify.py` |
+| 起動 | `ops/com.user.taiwan_radar_failure_notify.plist`（15分おき。スリープ中の分は復帰後に1回） |
+| 失敗の通知 | `failure` / `timed_out` / `startup_failure` の実行が新しく見つかったとき、まとめて1通。実行URLと「直近は成功（復旧済み）か継続中か」を添える。同じ実行は再通知しない。6時間より古い失敗は無視 |
+| 停止の通知 | 成功した実行が**30分以上**ない（cron-job.org停止・トークン失効(401)・GitHub障害など）とき。復旧するまで1回だけ |
+| 通知しない | `cancelled`（同時実行の取り消し）・実行中 |
+| 設定 | `~/.config/taiwan_radar_frames/slack_to` を10節と共用。状態は `failure_state.json`、ログは `failure_notify.log` |
+| 注意 | OpenClaw Gateway が止まっている・Macが起動していないと届かない（Bluesky通知と同じ制約）。単発の失敗は GitHub 側の一時障害のことが多い（2026-11-09に403で1回、18時台に4回） |
+
+### 導入手順（`slack_to` は10節で設定済みなら不要）
+
+```bash
+cp ~/projects/taiwan_radar_frames/ops/com.user.taiwan_radar_failure_notify.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.taiwan_radar_failure_notify.plist
+```
+
+動作確認:
+
+```bash
+python3 ~/projects/taiwan_radar_frames/ops/failure_notify.py --test       # テスト通知
+python3 ~/projects/taiwan_radar_frames/ops/failure_notify.py --dry-run    # 通知文だけ表示（送らない・状態も更新しない）
+launchctl print gui/$(id -u)/com.user.taiwan_radar_failure_notify | head  # 登録の確認
+```
+
+止める: `launchctl bootout gui/$(id -u)/com.user.taiwan_radar_failure_notify` と、`~/Library/LaunchAgents/` の plist を削除。

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.taiwan_radar_failure_notify</string>
+
+    <!-- update-frames（GitHub Actions）の失敗・停止を Slack DM で知らせる（通知のみ。再実行はしない） -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/masahiro/projects/taiwan_radar_frames/ops/failure_notify.py</string>
+    </array>
+
+    <!-- 15分おき。Macがスリープ中だった分は復帰後に1回だけ実行される -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/masahiro/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/masahiro/.config/taiwan_radar_frames/failure_notify.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/masahiro/.config/taiwan_radar_frames/failure_notify.log</string>
+</dict>
+</plist>
