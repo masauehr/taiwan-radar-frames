@@ -45,6 +45,12 @@ fetch(BASE + 'index.json').then(r => r.json()).then(idx => {
 - **GitHub Actions**（`update-frames`）が取得・変換 → **GitHub Pages**（`data` ブランチ・毎回1コミットで置き換え）で配信。保持は3時間。
 - 定期起動は **cron-job.org から5分ごと**（GitHub の `schedule` は数時間おきにしか動かなかったため）。トークン期限（2026-12-08）の前と、`update-frames` の**失敗・成功停止（30分以上）**のときに **Slack DM** で通知（Macのlaunchd。`ops/token_expiry_notify.py`・`ops/failure_notify.py`）。詳しくは [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。
 
+### 定期起動に使っている cron-job.org（概要）
+- **cron-job.org** は、「決めた時刻になったら指定のURLにアクセスしてくれる」**無料の外部cronサービス**。ここでは、**5分ごと**に、**GitHub の API で `update-frames` を起動する合図**を送らせている。
+- 使う理由: GitHub Actions 自身の定期実行（`schedule`）は時刻が保証されず、数時間おきにしか動かなかった（新規リポジトリでは最初の約2時間は0回）。Mac にも頼りたくないので、**時刻の正確さは cron-job.org、処理は GitHub Actions** と役割を分けた。`schedule` は予備。
+- 仕組み: cron-job.org → `POST .../actions/workflows/update.yml/dispatches`（`workflow_dispatch`・専用トークン認証）→ `update-frames` が起動 → 新しいコマがあれば取り込んで公開。無ければ何もしないので、何度呼んでも安全。
+- 注意: 専用トークンに**期限**がある（2026-12-08 00:15 UTC。14日前から Slack DM で通知）。失敗・停止も Slack DM で通知する。詳しい仕組み・設定・更新手順は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。
+
 ## 仕組み（概要）
 
 | 処理 | データ | 内容 |
