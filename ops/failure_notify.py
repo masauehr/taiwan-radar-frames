@@ -43,7 +43,7 @@ def parse_time(text):
     return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
-def fetch_runs(limit=40):
+def fetch_runs(limit=100):  # 5分おきで6時間分（IGNORE_OLDER_H）= 72件を超える数を取る
     """gh で直近の実行を取る。失敗したら None（通知はしない。次回に回す）"""
     exe = shutil.which("gh") or "/opt/homebrew/bin/gh"
     try:
@@ -83,7 +83,7 @@ def decide(runs, state, now):
     stale = last_ok is None or now - last_ok >= timedelta(minutes=STALE_MIN)
     stale_notified = state.get("stale_notified", False)
     if stale and not stale_notified:
-        when = last_ok.astimezone(JST).strftime("%m/%d %H:%M JST") if last_ok else "（直近40件に無し）"
+        when = last_ok.astimezone(JST).strftime("%m/%d %H:%M JST") if last_ok else "（直近100件に無し）"
         msgs.append("【taiwan-radar-frames】⚠️ update-frames の成功が %d 分以上ありません（最後の成功 %s）\n"
                     "cron-job.org の停止、トークンの期限切れ(401)、GitHub 側の障害などが考えられます。\n"
                     "確認: cron-job.org の履歴／ https://github.com/%s/actions" % (STALE_MIN, when, REPO))
