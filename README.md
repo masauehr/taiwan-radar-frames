@@ -13,7 +13,7 @@
 | アプリ | 公開URL | リポジトリ | 使い方 |
 |------|------|------|------|
 | 台湾天気ビューア（台湾特化・日本語/中国語併記） | [taiwan-weather-viewer](https://masauehr.github.io/taiwan-weather-viewer/) | [masauehr/taiwan-weather-viewer](https://github.com/masauehr/taiwan-weather-viewer) | レーダーと観測を1画面に重ねて、過去3時間を共通スライダーで再生 |
-| 衛星・レーダー・キキクルアプリ（Web版） | [iphone-weather-app](https://masauehr.github.io/iphone-weather-app/) | [masauehr/iphone-weather-app](https://github.com/masauehr/iphone-weather-app) | レーダー・衛星タブの[台湾]・[台湾観測]ボタン |
+| 衛星・レーダー・キキクル App（Web版） | [iphone-weather-app](https://masauehr.github.io/iphone-weather-app/) | [masauehr/iphone-weather-app](https://github.com/masauehr/iphone-weather-app) | レーダー・衛星タブの[台湾]・[台湾観測]ボタン |
 
 ## 配信物
 
